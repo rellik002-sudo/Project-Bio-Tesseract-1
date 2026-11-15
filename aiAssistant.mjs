@@ -2,18 +2,27 @@
 // Pure backend intelligent rule-based aerospace flight surgeon & website guide
 
 export const SUGGESTED_QUESTIONS = [
+  "What is Project Bio-Tesseract?",
+  "How does the 4D Bio-Tesseract work?",
   "How do I check astronaut vitals?",
-  "What do the organ colors on the Body Map mean?",
   "How does the AI Medical Advisor calculate decompression risk?",
   "What should I do if a Critical Alarm triggers?",
-  "How do I monitor cabin pressure & environmental gases?",
   "Who are the crew members and their EVA roles?",
-  "What are the safe thresholds for heart rate and SpO2?",
+  "What are the life support and suit pressure limits?",
   "Can you simulate an emergency anomaly?"
 ];
 
 // Comprehensive Knowledge Base & Intent Dictionary
 const INTENTS = [
+  // ── 4D Bio-Tesseract Resonator ──
+  {
+    id: "tesseract_4d",
+    keywords: ["tesseract", "4d", "hypercube", "so4", "rotation", "stereographic", "orthographic", "resonator", "geometry", "hyperspace", "vectors"],
+    reply: `💠 **4D Bio-Tesseract Resonator System**\n\nThe 4D Bio-Tesseract models higher-dimensional spatial bio-resonance projected into 3D and 2D canvas space:\n\n* **Geometry**: 16 4D vertices $(\\pm 1, \\pm 1, \\pm 1, \\pm 1)$ and 32 hyper-vectors calculated in real time.\n* **Mathematical Formulation**: Real-time 4D rotation across four orthogonal planes ($XW, ZW, XY, YZ$) using the $SO(4)$ Lie group rotation matrix.\n* **Biometric Coupling**: The hypercube's vertex dilation and inner energy ring pulse synchronously with the active astronaut's instantaneous heart rate ($\\text{BPM} / 60\\text{ Hz}$).\n* **Interactive Controls**: Switch between Stereographic and Orthographic projections, pause/resume rotation, and modulate angular velocity via the HUD slider.`,
+    action: "navigate:tesseract",
+    actionLabel: "💠 Open 4D Bio-Tesseract Channel",
+    followUps: ["How do I check astronaut vitals?", "How does the AI Medical Advisor calculate decompression risk?", "Can you simulate an emergency anomaly?"]
+  },
   // ── Navigation & Site Tour ──
   {
     id: "site_tour",
