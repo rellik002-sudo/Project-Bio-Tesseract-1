@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VITAL_PARAMETERS, ENVIRONMENTAL_PARAMETERS, ORGANS, evaluateVitalStatus } from "./parameters.mjs";
 import { initDatabase, getLatestReading, getReadingHistory, insertTelemetryRecord } from "./db.mjs";
+import { processAssistantQuery, SUGGESTED_QUESTIONS } from "./aiAssistant.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -241,6 +242,20 @@ const server = http.createServer(async (req, res) => {
       missionAlerts.unshift(newAlert);
       baselineReadings.heart_rate = 125.0;
       return sendJson(res, 201, { success: true, alert: newAlert, alerts: missionAlerts });
+    }
+
+    // ── AI ASSISTANT API ENDPOINTS ──
+    // API: GET /api/assistant/suggestions
+    if (req.method === "GET" && pathname === "/api/assistant/suggestions") {
+      return sendJson(res, 200, { success: true, suggestions: SUGGESTED_QUESTIONS });
+    }
+
+    // API: POST /api/assistant or /api/assistant/chat
+    if (req.method === "POST" && (pathname === "/api/assistant" || pathname === "/api/assistant/chat")) {
+      const body = await parseBody(req);
+      const query = body.message || body.query || body.question || "";
+      const result = processAssistantQuery(query);
+      return sendJson(res, 200, result);
     }
 
     // API: POST /api/telemetry (Ingestion for real data)

@@ -690,4 +690,291 @@ window.addEventListener("DOMContentLoaded", () => {
     if (active.id === "page-environmental") loadEnvironmental();
     if (active.id === "page-alerts") loadAlerts();
   }, 3000);
+
+  // Initialize Mission AI Assistant
+  initAiAssistant();
 });
+
+// ═════════════════════════════════════════════════════════════════════
+// 6. MISSION AI ASSISTANT CONTROLLER
+// ═════════════════════════════════════════════════════════════════════
+let aiSuggestionsCache = [];
+let aiInitialized = false;
+
+function toggleAiAssistant() {
+  const widget = document.getElementById("ai-assistant-widget");
+  if (!widget) return;
+  const isClosed = widget.classList.contains("closed");
+  if (isClosed) {
+    widget.classList.remove("closed");
+    widget.setAttribute("aria-hidden", "false");
+    const input = document.getElementById("ai-chat-input");
+    if (input) input.focus();
+    if (!aiInitialized) {
+      initAiAssistant();
+    }
+  } else {
+    widget.classList.add("closed");
+    widget.setAttribute("aria-hidden", "true");
+  }
+}
+
+function openAiAssistant() {
+  const widget = document.getElementById("ai-assistant-widget");
+  if (widget && widget.classList.contains("closed")) {
+    toggleAiAssistant();
+  }
+}
+
+function closeAiAssistant() {
+  const widget = document.getElementById("ai-assistant-widget");
+  if (widget && !widget.classList.contains("closed")) {
+    toggleAiAssistant();
+  }
+}
+
+async function initAiAssistant() {
+  aiInitialized = true;
+  await loadAiSuggestions();
+  const messagesContainer = document.getElementById("ai-chat-messages");
+  if (messagesContainer && messagesContainer.children.length === 0) {
+    renderWelcomeGreeting();
+  }
+}
+
+function renderWelcomeGreeting() {
+  appendAiMessage(
+    "assistant",
+    "Greetings! I am the **Bio-Tesseract AI Mission Assistant**.\n\nI monitor real-time crew physiological telemetry, evaluate environmental life support parameters, run diagnostic scans, and guide you through mission operations.\n\nSelect a quick mission prompt below or type your query:",
+    "navigate:vitals",
+    "Explore Live Astronaut Vitals →",
+    [
+      "What is Project Bio-Tesseract?",
+      "How to check astronaut vitals?",
+      "Show anatomical body map",
+      "Simulate critical anomaly"
+    ]
+  );
+}
+
+function resetAiChat() {
+  const messagesContainer = document.getElementById("ai-chat-messages");
+  if (messagesContainer) {
+    messagesContainer.innerHTML = "";
+  }
+  renderWelcomeGreeting();
+}
+
+async function loadAiSuggestions() {
+  const container = document.getElementById("ai-chips-container");
+  if (!container) return;
+
+  try {
+    const res = await fetch("/api/assistant/suggestions");
+    const data = await res.json();
+    if (data.success && Array.isArray(data.suggestions)) {
+      aiSuggestionsCache = data.suggestions;
+      container.innerHTML = "";
+      data.suggestions.forEach(q => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "ai-chip-btn";
+        chip.textContent = q;
+        chip.onclick = () => sendAiQuery(q);
+        container.appendChild(chip);
+      });
+    }
+  } catch (err) {
+    console.warn("Could not load AI suggestions:", err);
+  }
+}
+
+function renderAiMarkdown(text) {
+  if (!text) return "";
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Bold formatting
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Inline code formatting
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  const lines = html.split('\n');
+  let result = '';
+  let inList = false;
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+      if (!inList) {
+        result += '<ul>';
+        inList = true;
+      }
+      result += `<li>${trimmed.substring(2)}</li>`;
+    } else {
+      if (inList) {
+        result += '</ul>';
+        inList = false;
+      }
+      if (trimmed.length > 0) {
+        result += `<p>${trimmed}</p>`;
+      }
+    }
+  }
+  if (inList) result += '</ul>';
+  return result;
+}
+
+function appendAiMessage(role, text, action = null, actionLabel = null, followUps = []) {
+  const container = document.getElementById("ai-chat-messages");
+  if (!container) return;
+
+  const msgDiv = document.createElement("div");
+  msgDiv.className = `ai-msg ai-msg-${role}`;
+
+  const bubble = document.createElement("div");
+  bubble.className = "ai-bubble";
+  bubble.innerHTML = renderAiMarkdown(text);
+
+  // In-Chat Action Trigger Button
+  if (action && actionLabel) {
+    const actBox = document.createElement("div");
+    actBox.className = "ai-action-container";
+    const actBtn = document.createElement("button");
+    actBtn.type = "button";
+    actBtn.className = "ai-msg-action-btn";
+    actBtn.innerHTML = `<span>⚡</span> ${actionLabel}`;
+    actBtn.onclick = () => executeAssistantAction(action);
+    actBox.appendChild(actBtn);
+    bubble.appendChild(actBox);
+  }
+
+  // Follow-Up Quick Suggestions
+  if (Array.isArray(followUps) && followUps.length > 0) {
+    const followBox = document.createElement("div");
+    followBox.className = "ai-msg-followups";
+    followUps.forEach(f => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "ai-followup-pill";
+      pill.textContent = f;
+      pill.onclick = () => sendAiQuery(f);
+      followBox.appendChild(pill);
+    });
+    bubble.appendChild(followBox);
+  }
+
+  msgDiv.appendChild(bubble);
+  container.appendChild(msgDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showTypingIndicator() {
+  const container = document.getElementById("ai-chat-messages");
+  if (!container) return null;
+
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "ai-msg ai-msg-assistant ai-typing-msg";
+  typingDiv.id = "ai-typing-indicator";
+  typingDiv.innerHTML = `
+    <div class="ai-bubble">
+      <div class="ai-typing-indicator">
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+        <span class="ai-typing-dot"></span>
+      </div>
+    </div>
+  `;
+  container.appendChild(typingDiv);
+  container.scrollTop = container.scrollHeight;
+  return typingDiv;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById("ai-typing-indicator");
+  if (el) el.remove();
+}
+
+async function sendAiQuery(queryText) {
+  const trimmed = (queryText || "").trim();
+  if (!trimmed) return;
+
+  // Append user message
+  appendAiMessage("user", trimmed);
+
+  // Show typing indicator
+  showTypingIndicator();
+
+  try {
+    const res = await fetch("/api/assistant/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: trimmed })
+    });
+    const data = await res.json();
+    removeTypingIndicator();
+
+    if (data.success) {
+      appendAiMessage(
+        "assistant",
+        data.reply,
+        data.action,
+        data.actionLabel,
+        data.followUps
+      );
+    } else {
+      appendAiMessage(
+        "assistant",
+        "Apologies, telemetry link experienced a glitch. Please re-try your question.",
+        null,
+        null,
+        ["How to check astronaut vitals?", "What is Project Bio-Tesseract?"]
+      );
+    }
+  } catch (err) {
+    removeTypingIndicator();
+    console.error("AI Assistant request error:", err);
+    appendAiMessage(
+      "assistant",
+      "Network glitch: Unable to contact Bio-Tesseract backend. Check server connectivity.",
+      null,
+      null,
+      []
+    );
+  }
+}
+
+function handleAiChatSubmit(event) {
+  if (event) event.preventDefault();
+  const input = document.getElementById("ai-chat-input");
+  if (!input) return;
+  const text = input.value;
+  if (!text || !text.trim()) return;
+  input.value = "";
+  sendAiQuery(text);
+}
+
+function executeAssistantAction(action) {
+  if (!action) return;
+
+  if (action.startsWith("navigate:")) {
+    const pageId = action.split(":")[1];
+    navigateTo(pageId);
+  } else if (action.startsWith("scroll:")) {
+    const sectionId = action.split(":")[1];
+    scrollToSection(sectionId);
+  } else if (action === "trigger:anomaly") {
+    triggerSimulatedAnomaly();
+  }
+}
+
+// Global exposure for inline HTML events
+window.toggleAiAssistant = toggleAiAssistant;
+window.openAiAssistant = openAiAssistant;
+window.closeAiAssistant = closeAiAssistant;
+window.resetAiChat = resetAiChat;
+window.handleAiChatSubmit = handleAiChatSubmit;
+window.executeAssistantAction = executeAssistantAction;
+window.sendAiQuery = sendAiQuery;

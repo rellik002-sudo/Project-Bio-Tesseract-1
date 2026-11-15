@@ -57,6 +57,10 @@
           <button class="nav-btn" data-page="environmental" id="nav-environmental">Environmental Factors</button>
           <button class="nav-btn" data-page="medical" id="nav-medical">Medical Advisor</button>
           <button class="nav-btn" data-page="alerts" id="nav-alerts">Mission Alerts</button>
+          <button class="nav-assistant-btn" onclick="toggleAiAssistant()" id="nav-assistant-btn" title="Open Bio-Tesseract Mission AI Assistant">
+            <span class="assistant-btn-pulse"></span>
+            🤖 AI Assistant
+          </button>
           <button class="nav-cta-btn" onclick="navigateTo('vitals')">Open Vitals →</button>
         </nav>
       </div>
@@ -624,6 +628,61 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- FLOATING MISSION AI ASSISTANT LAUNCHER & WIDGET               -->
+  <!-- ============================================================== -->
+  <button id="ai-assistant-launcher" class="ai-assistant-launcher" onclick="toggleAiAssistant()" aria-label="Open AI Mission Assistant" title="Ask Bio-Tesseract AI Mission Assistant">
+    <div class="ai-launcher-pulse"></div>
+    <span class="ai-launcher-icon">🤖</span>
+    <span class="ai-launcher-text">Mission AI</span>
+    <span class="ai-launcher-status-dot"></span>
+  </button>
+
+  <div id="ai-assistant-widget" class="ai-assistant-widget closed" aria-hidden="true">
+    <div class="ai-widget-header">
+      <div class="ai-header-left">
+        <div class="ai-header-avatar">🤖</div>
+        <div>
+          <div class="ai-header-title">Bio-Tesseract AI Mission Assistant</div>
+          <div class="ai-header-subtitle">
+            <span class="ai-pulse-dot"></span> Online • Aerospace Knowledge Engine
+          </div>
+        </div>
+      </div>
+      <div class="ai-header-actions">
+        <button class="ai-header-btn" onclick="resetAiChat()" title="Reset Conversation" aria-label="Reset conversation">🔄</button>
+        <button class="ai-header-btn" onclick="toggleAiAssistant()" title="Close Assistant" aria-label="Close assistant">✕</button>
+      </div>
+    </div>
+
+    <!-- Message Stream -->
+    <div class="ai-widget-messages" id="ai-chat-messages">
+      <!-- Injected by JavaScript -->
+    </div>
+
+    <!-- Suggested Quick Prompts -->
+    <div class="ai-widget-suggestions" id="ai-suggestions-box">
+      <div class="ai-suggestions-label">💡 QUICK MISSION QUESTIONS:</div>
+      <div class="ai-chips-wrap" id="ai-chips-container">
+        <!-- Injected via /api/assistant/suggestions -->
+      </div>
+    </div>
+
+    <!-- Chat Input Form -->
+    <form class="ai-widget-form" id="ai-chat-form" onsubmit="handleAiChatSubmit(event)">
+      <input
+        type="text"
+        id="ai-chat-input"
+        class="ai-chat-input"
+        placeholder="Ask about vitals, alerts, body map, medical advisor..."
+        autocomplete="off"
+      />
+      <button type="submit" class="ai-chat-submit-btn" id="ai-send-btn" title="Send Question">
+        <span>Ask</span> ➔
+      </button>
+    </form>
   </div>
 
   <script src="app.js"></script>
