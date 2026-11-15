@@ -1,831 +1,804 @@
-// Client Application Controller — Project Bio-Tesseract (Deep Space Dashboard & AI Assistant)
-'use strict';
+// Client Application Controller — Project Bio-Tesseract
 
-// ═════════════════════════════════════════════════════════════════════
-// 1. STATE & CREW TELEMETRY DEFINITION
-// ═════════════════════════════════════════════════════════════════════
-const INITIAL_CREW = [
-  { id: 'AST-01', name: 'Cmdr. Sarah Vance', role: 'Mission Commander (EVA-1)', initials: 'SV', hr: 72, spo2: 98.4, bpSys: 118, bpDia: 76, suitP: 4.3, o2: 94, stress: 18, status: 'Nominal' },
-  { id: 'AST-02', name: 'Dr. Marcus Chen', role: 'Medical Specialist (EVA-2)', initials: 'MC', hr: 78, spo2: 99.0, bpSys: 122, bpDia: 80, suitP: 4.3, o2: 91, stress: 24, status: 'Nominal' },
-  { id: 'AST-03', name: 'Eng. Elena Rostova', role: 'Flight Engineer (Airlock)', initials: 'ER', hr: 68, spo2: 98.8, bpSys: 115, bpDia: 74, suitP: 14.7, o2: 98, stress: 15, status: 'Nominal' },
-  { id: 'AST-04', name: 'Pilot David Kalu', role: 'Command Pilot (Orbiter)', initials: 'DK', hr: 74, spo2: 98.2, bpSys: 120, bpDia: 78, suitP: 14.7, o2: 96, stress: 20, status: 'Nominal' }
-];
-
-let crew = [...INITIAL_CREW];
-let activeAstronautId = 'AST-01';
-let activeTab = 'overview';
-let isAlarmActive = false;
-let audioEnabled = true;
-
-let missionAlerts = [
-  { id: 'ALT-101', severity: 'NOMINAL', title: 'DSN Goldstone X-band lock confirmed', subsystem: 'Comms', time: '14:28:02', acknowledged: true },
-  { id: 'ALT-102', severity: 'NOMINAL', title: 'EMU-X Suit telemetry sync complete', subsystem: 'PLSS', time: '14:27:40', acknowledged: true },
-  { id: 'ALT-103', severity: 'CAUTION', title: 'Solar particle event flux elevation (low risk)', subsystem: 'Radiation', time: '14:25:15', acknowledged: false },
-  { id: 'ALT-104', severity: 'NOMINAL', title: '4D Bio-Tesseract hypercube resonance calibrated', subsystem: 'Bio-Core', time: '14:20:00', acknowledged: true }
-];
-
-function getActiveAstronaut() {
-  return crew.find(c => c.id === activeAstronautId) || crew[0];
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 2. MISSION ELAPSED TIME & AUDIO TOGGLE
-// ═════════════════════════════════════════════════════════════════════
-function initMissionClock() {
-  const metEl = document.getElementById('nav-met-time');
-  function tickClock() {
-    const baseSec = Math.floor((Date.now() / 1000) % 86400);
-    const hrs = String(Math.floor(baseSec / 3600)).padStart(2, '0');
-    const mins = String(Math.floor((baseSec % 3600) / 60)).padStart(2, '0');
-    const secs = String(baseSec % 60).padStart(2, '0');
-    if (metEl) metEl.textContent = `MET +042:${hrs}:${mins}:${secs}`;
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-}
-
-function toggleAudio() {
-  audioEnabled = !audioEnabled;
-  const label = document.getElementById('label-audio');
-  if (label) {
-    label.textContent = audioEnabled ? '🔊 HUD AUDIO' : '🔇 MUTED';
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 3. ASTRONAUT PROFILE & ROSTER CONTROLLER
-// ═════════════════════════════════════════════════════════════════════
-function handleSelectAstronaut(astId) {
-  activeAstronautId = astId;
-  const sel = document.getElementById('astronaut-selector');
-  if (sel && sel.value !== astId) sel.value = astId;
-
-  updateProfileCard();
-  updateAdvisorCard();
-  renderCrewRoster();
-}
-
-function updateProfileCard() {
-  const ast = getActiveAstronaut();
-  const avatar = document.getElementById('profile-avatar');
-  const nameEl = document.getElementById('profile-name');
-  const roleEl = document.getElementById('profile-role');
-  const o2Val = document.getElementById('profile-o2-val');
-  const o2Bar = document.getElementById('profile-o2-bar');
-  const batVal = document.getElementById('profile-bat-val');
-  const batBar = document.getElementById('profile-bat-bar');
-
-  if (avatar) avatar.textContent = ast.initials;
-  if (nameEl) nameEl.textContent = ast.name;
-  if (roleEl) roleEl.textContent = ast.role;
-  if (o2Val) o2Val.textContent = `${ast.o2}%`;
-  if (o2Bar) o2Bar.style.width = `${ast.o2}%`;
-  if (batVal) batVal.textContent = '88.5% (6.2h)';
-  if (batBar) batBar.style.width = '88.5%';
-
-  // Update ECG display metrics
-  const ecgHr = document.getElementById('ecg-hr-display');
-  const ecgSpo2 = document.getElementById('ecg-spo2-display');
-  const ecgBp = document.getElementById('ecg-bp-display');
-  if (ecgHr) ecgHr.innerHTML = `${ast.hr} <span class="metric-unit">BPM</span>`;
-  if (ecgSpo2) ecgSpo2.textContent = `${ast.spo2}%`;
-  if (ecgBp) ecgBp.innerHTML = `${ast.bpSys}/${ast.bpDia} <span class="metric-unit">mmHg</span>`;
-
-  // Update Life Support Gauges
-  const lsSuitP = document.getElementById('ls-suit-p-val');
-  const lsSuitBar = document.getElementById('ls-suit-p-bar');
-  const lsO2Pri = document.getElementById('ls-o2-pri-val');
-  const lsO2Bar = document.getElementById('ls-o2-pri-bar');
-  if (lsSuitP) lsSuitP.textContent = ast.suitP.toFixed(1);
-  if (lsSuitBar) lsSuitBar.style.width = `${(ast.suitP / 5.0) * 100}%`;
-  if (lsO2Pri) lsO2Pri.textContent = `${ast.o2}%`;
-  if (lsO2Bar) lsO2Bar.style.width = `${ast.o2}%`;
-
-  // Tesseract overlay update
-  const tFreq = document.getElementById('tesseract-freq-val');
-  const tStress = document.getElementById('tesseract-stress-val');
-  if (tFreq) tFreq.textContent = `${(ast.hr / 60).toFixed(2)} Hz`;
-  if (tStress) {
-    tStress.textContent = `${ast.stress}%`;
-    tStress.className = ast.stress > 50 ? 'color-crimson' : 'color-emerald';
-  }
-}
-
-function renderCrewRoster() {
-  const container = document.getElementById('crew-roster-grid');
-  if (!container) return;
-  container.innerHTML = '';
-
-  crew.forEach(member => {
-    const isSelected = member.id === activeAstronautId;
-    const card = document.createElement('div');
-    card.className = `crew-card ${isSelected ? 'active' : ''}`;
-    card.onclick = () => handleSelectAstronaut(member.id);
-
-    card.innerHTML = `
-      <div class="crew-card-top">
-        <div class="font-orbitron crew-card-name">${member.name}</div>
-        <span class="status-dot ${member.status === 'Nominal' ? 'nominal' : 'warning'}"></span>
-      </div>
-      <div class="font-mono crew-card-role">${member.role}</div>
-      <div class="crew-card-metrics">
-        <div><span class="crew-metric-dim">HR: </span><strong class="color-white">${member.hr} BPM</strong></div>
-        <div><span class="crew-metric-dim">SpO₂: </span><strong class="color-emerald">${member.spo2}%</strong></div>
-        <div><span class="crew-metric-dim">Suit P: </span><strong class="color-cyan">${member.suitP} psi</strong></div>
-        <div><span class="crew-metric-dim">O₂ Level: </span><strong class="color-white">${member.o2}%</strong></div>
-      </div>
-    `;
-    container.appendChild(card);
+// Page Navigation
+function navigateTo(pageId) {
+  document.querySelectorAll(".page-view").forEach(page => {
+    page.classList.remove("active");
   });
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.classList.remove("active");
+  });
+
+  const targetPage = document.getElementById(`page-${pageId}`);
+  const targetNav = document.getElementById(`nav-${pageId}`);
+
+  if (targetPage) targetPage.classList.add("active");
+  if (targetNav) targetNav.classList.add("active");
+
+  window.location.hash = pageId;
+
+  // Scroll to top on page switch
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (pageId === "home") {
+    loadHome();
+    loadAlerts();
+    runNeuralScan(false);
+  } else if (pageId === "vitals") {
+    loadVitals();
+  } else if (pageId === "environmental") {
+    loadEnvironmental();
+  } else if (pageId === "medical") {
+    mountMedicalView();
+  } else if (pageId === "alerts") {
+    mountAlertsView();
+  }
 }
+
+// Smooth scroll to section on home page
+function scrollToSection(sectionId) {
+  const currentActive = document.querySelector(".page-view.active");
+  if (!currentActive || currentActive.id !== "page-home") {
+    navigateTo("home");
+    setTimeout(() => {
+      const el = document.getElementById(sectionId);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 150);
+  } else {
+    const el = document.getElementById(sectionId);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function scrollToBodyMap() {
+  scrollToSection("body-map-section");
+}
+
+// Attach Nav Listeners
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const pageId = btn.getAttribute("data-page");
+    navigateTo(pageId);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════
-// 4. LIVE BIOMETRIC DRIFT ENGINE
+// 1. HOME & BODY MAP TELEMETRY
 // ═════════════════════════════════════════════════════════════════════
-function initBiometricDrift() {
-  setInterval(() => {
-    crew = crew.map(ast => {
-      if (ast.status === 'Warning' || isAlarmActive) {
-        return ast; // Keep elevated during drill
-      }
-      const hrDelta = Math.floor(Math.random() * 3) - 1;
-      const newHr = Math.min(108, Math.max(60, ast.hr + hrDelta));
-      const newSpo2 = +(Math.min(99.8, Math.max(97.2, ast.spo2 + (Math.random() * 0.2 - 0.1)))).toFixed(1);
-      return {
-        ...ast,
-        hr: newHr,
-        spo2: newSpo2
-      };
-    });
-
-    updateProfileCard();
-    renderCrewRoster();
-  }, 2500);
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 5. 4D BIO-TESSERACT RESONATOR (SO(4) HYPERCUBE ENGINE)
-// ═════════════════════════════════════════════════════════════════════
-let tesseractCanvas, tesseractCtx;
-let tesseractRotating = true;
-let tesseractMode = 'stereographic';
-let tesseractSpeed = 0.015;
-let tesseractAnimId;
-
-// 16 Vertices of a 4D Hypercube: (±1, ±1, ±1, ±1)
-const vertices4D = [];
-for (let x = -1; x <= 1; x += 2) {
-  for (let y = -1; y <= 1; y += 2) {
-    for (let z = -1; z <= 1; z += 2) {
-      for (let w = -1; w <= 1; w += 2) {
-        vertices4D.push([x, y, z, w]);
-      }
-    }
-  }
-}
-
-// 32 Edges connecting vertices with Hamming distance of 1
-const tesseractEdges = [];
-for (let i = 0; i < 16; i++) {
-  for (let j = i + 1; j < 16; j++) {
-    let diff = 0;
-    for (let k = 0; k < 4; k++) {
-      if (vertices4D[i][k] !== vertices4D[j][k]) diff++;
-    }
-    if (diff === 1) tesseractEdges.push([i, j]);
-  }
-}
-
-let angleXY = 0, angleXZ = 0, angleXW = 0, angleYZ = 0, angleYW = 0, angleZW = 0;
-
-function rotate4D(v) {
-  let [x, y, z, w] = v;
-
-  // XW rotation
-  const cosXW = Math.cos(angleXW), sinXW = Math.sin(angleXW);
-  const x1 = x * cosXW - w * sinXW;
-  const w1 = x * sinXW + w * cosXW;
-  x = x1; w = w1;
-
-  // ZW rotation
-  const cosZW = Math.cos(angleZW), sinZW = Math.sin(angleZW);
-  const z1 = z * cosZW - w * sinZW;
-  const w2 = z * sinZW + w * cosZW;
-  z = z1; w = w2;
-
-  // XY rotation
-  const cosXY = Math.cos(angleXY), sinXY = Math.sin(angleXY);
-  const x2 = x * cosXY - y * sinXY;
-  const y1 = x * sinXY + y * cosXY;
-  x = x2; y = y1;
-
-  // YZ rotation
-  const cosYZ = Math.cos(angleYZ), sinYZ = Math.sin(angleYZ);
-  const y2 = y * cosYZ - z * sinYZ;
-  const z2 = y * sinYZ + z * cosYZ;
-  y = y2; z = z2;
-
-  return [x, y, z, w];
-}
-
-function project4D(v, width, height, pulseFactor) {
-  let [x, y, z, w] = v;
-  const scale = 1.0 + (pulseFactor * 0.1);
-  x *= scale; y *= scale; z *= scale; w *= scale;
-
-  const distance4D = 2.5;
-  const distance3D = 3.5;
-
-  let factor4D = tesseractMode === 'stereographic' ? 1 / (distance4D - w) : 0.5;
-  const x3D = x * factor4D;
-  const y3D = y * factor4D;
-  const z3D = z * factor4D;
-
-  const factor3D = 1 / (distance3D - z3D);
-  const x2D = x3D * factor3D * (width * 0.9) + width / 2;
-  const y2D = y3D * factor3D * (height * 0.9) + height / 2;
-
-  return { x: x2D, y: y2D, depth: z3D + w, wVal: w };
-}
-
-function initTesseractResonator() {
-  tesseractCanvas = document.getElementById('tesseract-canvas');
-  if (!tesseractCanvas) return;
-  tesseractCtx = tesseractCanvas.getContext('2d');
-
-  function render(time) {
-    if (!tesseractCtx) return;
-    const width = tesseractCanvas.width;
-    const height = tesseractCanvas.height;
-
-    tesseractCtx.clearRect(0, 0, width, height);
-
-    const ast = getActiveAstronaut();
-    const pulseSpeed = (ast.hr / 60) * 2 * Math.PI;
-    const pulseFactor = Math.sin((time / 1000) * pulseSpeed) * 0.5 + 0.5;
-
-    if (tesseractRotating) {
-      angleXW += tesseractSpeed * 0.8;
-      angleZW += tesseractSpeed * 0.6;
-      angleXY += tesseractSpeed * 0.4;
-      angleYZ += tesseractSpeed * 0.3;
-    }
-
-    const projected = vertices4D.map(v => {
-      const rotated = rotate4D(v);
-      return project4D(rotated, width, height, pulseFactor);
-    });
-
-    // Edges
-    tesseractEdges.forEach(([i, j]) => {
-      const p1 = projected[i];
-      const p2 = projected[j];
-      const avgDepth = (p1.depth + p2.depth) / 2;
-      const alpha = Math.max(0.2, Math.min(0.9, (avgDepth + 1.5) / 3));
-
-      tesseractCtx.beginPath();
-      tesseractCtx.moveTo(p1.x, p1.y);
-      tesseractCtx.lineTo(p2.x, p2.y);
-
-      if (ast.stress > 50 || isAlarmActive) {
-        tesseractCtx.strokeStyle = `rgba(255, 42, 85, ${alpha})`;
-        tesseractCtx.lineWidth = 2.0;
-      } else {
-        tesseractCtx.strokeStyle = `rgba(0, 240, 255, ${alpha})`;
-        tesseractCtx.lineWidth = 1.6;
-      }
-      tesseractCtx.stroke();
-    });
-
-    // Vertices
-    projected.forEach(p => {
-      const radius = 3.5 + Math.max(0, (p.wVal + 1) * 2.5) + (pulseFactor * 2);
-      tesseractCtx.beginPath();
-      tesseractCtx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-      tesseractCtx.fillStyle = ast.stress > 50 || isAlarmActive ? 'rgba(255, 42, 85, 0.8)' : 'rgba(0, 240, 255, 0.85)';
-      tesseractCtx.fill();
-
-      tesseractCtx.beginPath();
-      tesseractCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-      tesseractCtx.fillStyle = '#ffffff';
-      tesseractCtx.fill();
-    });
-
-    // Central Energy Ring
-    tesseractCtx.beginPath();
-    tesseractCtx.arc(width / 2, height / 2, 60 + pulseFactor * 10, 0, Math.PI * 2);
-    tesseractCtx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
-    tesseractCtx.setLineDash([4, 6]);
-    tesseractCtx.stroke();
-    tesseractCtx.setLineDash([]);
-
-    tesseractAnimId = requestAnimationFrame(render);
-  }
-
-  tesseractAnimId = requestAnimationFrame(render);
-}
-
-function toggleTesseractRotation() {
-  tesseractRotating = !tesseractRotating;
-  const btn = document.getElementById('btn-toggle-tesseract');
-  if (btn) btn.textContent = tesseractRotating ? '⏸ PAUSE 4D' : '▶ RESUME 4D';
-}
-
-function toggleTesseractProjection() {
-  tesseractMode = tesseractMode === 'stereographic' ? 'orthographic' : 'stereographic';
-  const btn = document.getElementById('btn-toggle-projection');
-  const overlay = document.getElementById('tesseract-proj-mode-val');
-  if (btn) btn.textContent = `MODE: ${tesseractMode.slice(0, 6).toUpperCase()}`;
-  if (overlay) overlay.textContent = tesseractMode.toUpperCase();
-}
-
-function setTesseractSpeed(val) {
-  tesseractSpeed = parseFloat(val);
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 6. REAL-TIME ECG & PPG OSCILLOSCOPE ENGINE
-// ═════════════════════════════════════════════════════════════════════
-let ecgCanvas, ecgCtx;
-let currentLead = 'LEAD-II';
-let sweepSpeed = 2.5;
-let ecgPoints = [];
-let currentEcgX = 0;
-let ecgStartTime = performance.now();
-let ecgAnimId;
-
-function getEcgSample(t, heartRate) {
-  const period = 60 / heartRate;
-  const norm = (t % period) / period;
-  let sample = 0;
-
-  // P Wave
-  if (norm > 0.1 && norm < 0.2) {
-    sample = Math.sin(((norm - 0.1) / 0.1) * Math.PI) * 12;
-  }
-  // Q Wave
-  else if (norm >= 0.22 && norm < 0.25) {
-    sample = -10;
-  }
-  // R Peak
-  else if (norm >= 0.25 && norm < 0.28) {
-    sample = Math.sin(((norm - 0.25) / 0.03) * Math.PI) * 75;
-  }
-  // S Wave
-  else if (norm >= 0.28 && norm < 0.31) {
-    sample = -20;
-  }
-  // T Wave
-  else if (norm >= 0.42 && norm < 0.6) {
-    sample = Math.sin(((norm - 0.42) / 0.18) * Math.PI) * 22;
-  }
-  // Baseline Noise
-  sample += (Math.random() - 0.5) * 2;
-
-  return sample;
-}
-
-function initEcgOscilloscope() {
-  ecgCanvas = document.getElementById('ecg-canvas');
-  if (!ecgCanvas) return;
-  ecgCtx = ecgCanvas.getContext('2d');
-
-  const width = ecgCanvas.width;
-  const height = ecgCanvas.height;
-  ecgPoints = new Array(width).fill(height / 2);
-  currentEcgX = 0;
-  ecgStartTime = performance.now();
-
-  function drawGrid() {
-    ecgCtx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
-    ecgCtx.lineWidth = 1;
-
-    for (let x = 0; x < width; x += 20) {
-      ecgCtx.beginPath(); ecgCtx.moveTo(x, 0); ecgCtx.lineTo(x, height); ecgCtx.stroke();
-    }
-    for (let y = 0; y < height; y += 20) {
-      ecgCtx.beginPath(); ecgCtx.moveTo(0, y); ecgCtx.lineTo(width, y); ecgCtx.stroke();
-    }
-
-    ecgCtx.strokeStyle = 'rgba(0, 240, 255, 0.18)';
-    for (let x = 0; x < width; x += 100) {
-      ecgCtx.beginPath(); ecgCtx.moveTo(x, 0); ecgCtx.lineTo(x, height); ecgCtx.stroke();
-    }
-    for (let y = 0; y < height; y += 100) {
-      ecgCtx.beginPath(); ecgCtx.moveTo(0, y); ecgCtx.lineTo(width, y); ecgCtx.stroke();
-    }
-  }
-
-  function render() {
-    if (!ecgCtx) return;
-    const now = performance.now();
-    const elapsed = (now - ecgStartTime) / 1000;
-    const ast = getActiveAstronaut();
-
-    const raw = getEcgSample(elapsed, ast.hr);
-    const baselineY = height / 2;
-    const yVal = baselineY - raw;
-
-    for (let i = 0; i < Math.ceil(sweepSpeed); i++) {
-      ecgPoints[currentEcgX] = yVal;
-      currentEcgX = (currentEcgX + 1) % width;
-    }
-
-    ecgCtx.fillStyle = 'rgba(7, 12, 24, 0.95)';
-    ecgCtx.fillRect(0, 0, width, height);
-
-    drawGrid();
-
-    // Waveform
-    ecgCtx.beginPath();
-    ecgCtx.strokeStyle = ast.stress > 50 || isAlarmActive ? '#ff2a55' : '#00ff88';
-    ecgCtx.lineWidth = 2.2;
-    ecgCtx.lineJoin = 'round';
-    ecgCtx.shadowColor = ecgCtx.strokeStyle;
-    ecgCtx.shadowBlur = 8;
-
-    for (let x = 0; x < width; x++) {
-      if (Math.abs(x - currentEcgX) < 12) continue;
-      if (x === 0 || Math.abs(x - currentEcgX) === 12) {
-        ecgCtx.moveTo(x, ecgPoints[x]);
-      } else {
-        ecgCtx.lineTo(x, ecgPoints[x]);
-      }
-    }
-    ecgCtx.stroke();
-    ecgCtx.shadowBlur = 0;
-
-    // Sweep Cursor Line
-    ecgCtx.beginPath();
-    ecgCtx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
-    ecgCtx.lineWidth = 2;
-    ecgCtx.moveTo(currentEcgX, 0);
-    ecgCtx.lineTo(currentEcgX, height);
-    ecgCtx.stroke();
-
-    // Sweep Tip Dot
-    ecgCtx.beginPath();
-    ecgCtx.arc(currentEcgX, ecgPoints[currentEcgX], 4, 0, Math.PI * 2);
-    ecgCtx.fillStyle = '#00f0ff';
-    ecgCtx.shadowColor = '#00f0ff';
-    ecgCtx.shadowBlur = 10;
-    ecgCtx.fill();
-    ecgCtx.shadowBlur = 0;
-
-    ecgAnimId = requestAnimationFrame(render);
-  }
-
-  ecgAnimId = requestAnimationFrame(render);
-}
-
-function setEcgLead(lead) {
-  currentLead = lead;
-  const badge = document.getElementById('ecg-lead-badge');
-  if (badge) badge.textContent = lead;
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 7. AI BIO-DIAGNOSTIC ADVISOR & COUNTERMEASURES
-// ═════════════════════════════════════════════════════════════════════
-function updateAdvisorCard() {
-  const ast = getActiveAstronaut();
-  const nameEl = document.getElementById('advisor-target-name');
-  const stressEl = document.getElementById('advisor-stress-val');
-  if (nameEl) nameEl.textContent = `BIO-ASSESSMENT FOR ${ast.name.toUpperCase()}`;
-  if (stressEl) {
-    stressEl.innerHTML = `${ast.stress}% <span class="risk-unit">[${ast.stress > 40 ? 'ELEVATED' : 'NORMAL'}]</span>`;
-    stressEl.className = `font-orbitron risk-val ${ast.stress > 40 ? 'color-amber' : 'color-cyan'}`;
-  }
-}
-
-function runNeuralDiagnosticScan() {
-  const btn = document.getElementById('btn-run-neural-scan');
-  const narrative = document.getElementById('advisor-narrative-text');
-  const badge = document.getElementById('advisor-classification-badge');
-
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '🔄 SCANNING SENSORS...';
-  }
-  if (narrative) {
-    narrative.innerHTML = '<span class="color-cyan">Synthesizing real-time telemetry from PPG, Galvanic Skin Response (GSR), Core Temp, and Suit Atmospheric sensors...</span>';
-  }
-
-  setTimeout(() => {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '⚡ RUN NEURAL SCAN';
-    }
-    const ast = getActiveAstronaut();
-    if (badge) {
-      badge.textContent = ast.stress > 50 ? 'ELEVATED SYMPATHETIC TONE' : 'STABLE CLASSIFICATION';
-      badge.className = `cyber-badge ${ast.stress > 50 ? 'cyber-badge-crimson' : 'cyber-badge-emerald'}`;
-    }
-    if (narrative) {
-      narrative.textContent = ast.stress > 50
-        ? `Autonomic markers detect acute tachycardic excursion in ${ast.name}. Suggest immediate hydration bolus and LCVG temperature reduction.`
-        : `All autonomic nervous system markers indicate optimal physiological adaptation to microgravity for ${ast.name}. Cardiac output and hemodynamic stability remain within acceptable EVA mission thresholds.`;
-    }
-  }, 1200);
-}
-
-function dispatchProtocol(type) {
-  const box = document.getElementById('protocol-feedback-box');
-  if (!box) return;
-  box.style.display = 'block';
-  box.innerHTML = `✓ Protocol <strong>${type.toUpperCase()}</strong> command transmitted to EMU-X Life Support Controller at ${new Date().toTimeString().slice(0, 8)}.`;
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 8. MISSION ALERTS & ANOMALY SIMULATION
-// ═════════════════════════════════════════════════════════════════════
-async function loadAlerts() {
-  const feedList = document.getElementById('alerts-feed-list');
-  const countBadge = document.getElementById('alerts-count-badge');
+async function loadHome() {
+  const badge = document.getElementById("body-status-badge");
+  const bodyParts = document.querySelectorAll(".body-part");
+  const allOrgans = ["brain", "heart", "lungs", "liver", "stomach", "kidneys"];
 
   try {
-    const res = await fetch('/api/alerts');
+    const res = await fetch("/api/vitals");
     const data = await res.json();
-    if (data.success && Array.isArray(data.alerts)) {
-      missionAlerts = data.alerts;
+
+    if (!data.success || !data.hasVitalData) {
+      if (badge) {
+        badge.className = "status-badge status-neutral";
+        badge.textContent = "Connecting to telemetry...";
+      }
+      return;
     }
+
+    let overallStatus = "NORMAL";
+    const statusValues = Object.values(data.organs || {});
+
+    if (statusValues.includes("CRITICAL")) {
+      overallStatus = "CRITICAL";
+    } else if (statusValues.includes("WARNING")) {
+      overallStatus = "WARNING";
+    }
+
+    if (badge) {
+      badge.className = `status-badge status-${overallStatus.toLowerCase()}`;
+      badge.textContent = overallStatus === "NORMAL" ? "All Systems Nominal" : `${overallStatus} Status Detected`;
+    }
+
+    bodyParts.forEach(part => {
+      part.classList.remove("body-neutral");
+      part.classList.add("body-normal");
+    });
+
+    allOrgans.forEach(org => {
+      const orgStatus = (data.organs && data.organs[org]) || "NORMAL";
+      const svgOrgan = document.getElementById(`organ-${org}`);
+
+      if (svgOrgan) {
+        let cssClass = "organ organ-normal";
+        if (orgStatus === "WARNING") cssClass = "organ organ-warning";
+        else if (orgStatus === "CRITICAL") cssClass = "organ organ-critical";
+        else if (orgStatus === "NO_DATA") cssClass = "organ organ-neutral";
+        svgOrgan.className.baseVal = cssClass;
+      }
+
+      const listItem = document.getElementById(`organ-item-${org}`);
+      if (listItem) {
+        const dot = listItem.querySelector(".status-dot");
+        const val = listItem.querySelector(".organ-val");
+        if (dot) {
+          dot.className = `status-dot dot-${orgStatus.toLowerCase()}`;
+        }
+        if (val) {
+          const param = data.vitals ? data.vitals.find(v => v.organ === org) : null;
+          if (param && param.latest && param.latest.value !== null && param.latest.value !== undefined) {
+            val.textContent = `${param.latest.value} ${param.unit}`;
+          } else {
+            val.textContent = "Nominal";
+          }
+        }
+      }
+    });
+
   } catch (err) {
-    // Fall back to local array
+    console.error("Error loading home anatomical telemetry:", err);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// 2. ASTRONAUT VITALS & TREND SPARKLINES
+// ═════════════════════════════════════════════════════════════════════
+async function loadVitals() {
+  const grid = document.getElementById("vitals-grid");
+  if (!grid) return;
+
+  try {
+    const res = await fetch("/api/vitals");
+    const data = await res.json();
+
+    if (!data.success || !Array.isArray(data.vitals) || data.vitals.length === 0) {
+      grid.innerHTML = "<div class='empty-state'>Awaiting telemetry synchronization...</div>";
+      return;
+    }
+
+    grid.innerHTML = "";
+
+    data.vitals.forEach(vital => {
+      const card = document.createElement("div");
+      card.className = "telemetry-card";
+
+      const hasVal = vital.latest && vital.latest.value !== null && vital.latest.value !== undefined;
+      const displayVal = hasVal ? vital.latest.value : "--";
+      const status = vital.status || "NORMAL";
+
+      let statusBadge = `<span class="status-badge status-${status.toLowerCase()}">${status}</span>`;
+      if (!hasVal) {
+        statusBadge = `<span class="status-badge status-neutral">NO DATA</span>`;
+      }
+
+      let graphHtml = "";
+      if (vital.hasGraph) {
+        if (Array.isArray(vital.history) && vital.history.length > 1) {
+          graphHtml = `<div class="card-graph">${renderSparkline(vital.history, status)}</div>`;
+        } else {
+          graphHtml = `<div class="empty-graph">Tracking trend stream...</div>`;
+        }
+      }
+
+      let targetDisplay = "Nominal Range";
+      if (vital.thresholds) {
+        if (Array.isArray(vital.thresholds.normal) && vital.thresholds.normal.length >= 2) {
+          targetDisplay = `Target: ${vital.thresholds.normal[0]} - ${vital.thresholds.normal[1]} ${vital.unit}`;
+        } else if (vital.thresholds.lowWarning !== undefined && vital.thresholds.highWarning !== undefined) {
+          targetDisplay = `Target: ${vital.thresholds.lowWarning} - ${vital.thresholds.highWarning} ${vital.unit}`;
+        }
+      }
+
+      const timeStr = vital.latest && vital.latest.recorded_at
+        ? new Date(vital.latest.recorded_at).toLocaleTimeString()
+        : 'Live Sync';
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="param-name">${vital.name}</div>
+          ${statusBadge}
+        </div>
+        <div class="card-reading">
+          <span class="param-value">${displayVal}</span>
+          <span class="param-unit">${vital.unit}</span>
+        </div>
+        ${graphHtml}
+        <div class="card-footer">
+          <span>${targetDisplay}</span>
+          <span>${timeStr}</span>
+        </div>
+      `;
+
+      grid.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Error loading vitals:", err);
+    grid.innerHTML = "<div class='empty-state'>Failed to load vital telemetry. Reconnecting...</div>";
+  }
+}
+
+function renderSparkline(history, status) {
+  if (!Array.isArray(history) || history.length < 2) return "";
+
+  const points = history.map(h => typeof h.value === 'number' ? h.value : parseFloat(h.value) || 0);
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+
+  const w = 280;
+  const h = 50;
+  const step = w / (points.length - 1);
+
+  let pathD = "";
+  points.forEach((val, i) => {
+    const x = i * step;
+    const y = h - ((val - min) / range) * (h - 10) - 5;
+    pathD += `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)} `;
+  });
+
+  let strokeColor = "var(--color-normal)";
+  if (status === "WARNING") strokeColor = "var(--color-warning)";
+  if (status === "CRITICAL") strokeColor = "var(--color-critical)";
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" class="sparkline-svg" preserveAspectRatio="none" style="width:100%; height:50px;">
+      <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// 3. ENVIRONMENTAL FACTORS
+// ═════════════════════════════════════════════════════════════════════
+async function loadEnvironmental() {
+  const grid = document.getElementById("environmental-grid");
+  if (!grid) return;
+
+  try {
+    const res = await fetch("/api/environmental");
+    const data = await res.json();
+
+    if (!data.success || !Array.isArray(data.environmental) || data.environmental.length === 0) {
+      grid.innerHTML = "<div class='empty-state'>Awaiting environmental telemetry...</div>";
+      return;
+    }
+
+    grid.innerHTML = "";
+
+    data.environmental.forEach(param => {
+      const card = document.createElement("div");
+      card.className = "env-card";
+
+      const hasVal = param.latest && param.latest.value !== null && param.latest.value !== undefined;
+      const displayVal = hasVal ? param.latest.value : "--";
+
+      card.innerHTML = `
+        <div class="env-name">${param.name}</div>
+        <div class="env-unit">${param.unit}</div>
+        <div class="env-reading">
+          <span class="env-value">${displayVal}</span>
+        </div>
+      `;
+
+      grid.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("Error loading environmental factors:", err);
+    grid.innerHTML = "<div class='empty-state'>Failed to load environmental telemetry. Reconnecting...</div>";
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// 4. AI MEDICAL ADVISOR (Diagnostics & Protocols)
+// ═════════════════════════════════════════════════════════════════════
+function runNeuralScan(withAnimation = true) {
+  const select = document.getElementById("advisor-astronaut-select");
+  const targetName = select ? select.value : "Cmdr. Sarah Vance";
+
+  const targetEl = document.getElementById("advisor-target-name");
+  const badgeEl = document.getElementById("advisor-status-badge");
+  const textEl = document.getElementById("advisor-diagnosis-text");
+  const btnScan = document.getElementById("btn-run-scan");
+
+  if (targetEl) targetEl.textContent = `BIO-ASSESSMENT FOR ${targetName.toUpperCase()}`;
+
+  if (withAnimation) {
+    if (btnScan) {
+      btnScan.disabled = true;
+      btnScan.textContent = "🔄 SCANNING SENSORS...";
+    }
+    if (textEl) {
+      textEl.innerHTML = `<span style="color: #38bdf8;">Synthesizing real-time telemetry from PPG, Galvanic Skin Response (GSR), Core Temp, and Suit Atmospheric sensors for ${targetName}...</span>`;
+    }
+    if (badgeEl) {
+      badgeEl.className = "cyber-badge cyber-badge-cyan";
+      badgeEl.textContent = "SCANNING...";
+    }
+
+    setTimeout(() => {
+      if (btnScan) {
+        btnScan.disabled = false;
+        btnScan.textContent = "⚡ RUN NEURAL SCAN";
+      }
+      finalizeDiagnosis(targetName);
+    }, 1100);
+  } else {
+    finalizeDiagnosis(targetName);
+  }
+}
+
+function finalizeDiagnosis(targetName) {
+  const badgeEl = document.getElementById("advisor-status-badge");
+  const textEl = document.getElementById("advisor-diagnosis-text");
+  const rDecomp = document.getElementById("risk-decompression");
+  const rHypox = document.getElementById("risk-hypoxia");
+  const rStress = document.getElementById("risk-stress");
+
+  const decompVal = (0.01 + Math.random() * 0.03).toFixed(2);
+  const stressVal = Math.floor(16 + Math.random() * 8);
+
+  if (rDecomp) rDecomp.innerHTML = `${decompVal}% <span class="risk-sub">[LOW]</span>`;
+  if (rHypox) rHypox.innerHTML = `0.00% <span class="risk-sub">[NIL]</span>`;
+  if (rStress) rStress.innerHTML = `${stressVal}% <span class="risk-sub">[NORMAL]</span>`;
+
+  if (badgeEl) {
+    badgeEl.className = "cyber-badge cyber-badge-emerald";
+    badgeEl.textContent = "STABLE CLASSIFICATION";
   }
 
-  if (countBadge) countBadge.textContent = `${missionAlerts.length} EVENTS`;
+  if (textEl) {
+    textEl.textContent = `All autonomic nervous system markers indicate optimal physiological adaptation to microgravity for ${targetName}. Cardiac output, oxygenation curve, and hemodynamic stability remain within nominal EVA flight envelopes.`;
+  }
+}
 
-  if (feedList) {
-    feedList.innerHTML = '';
-    missionAlerts.forEach(alert => {
-      let badgeClass = 'cyber-badge-cyan';
-      if (alert.severity === 'CRITICAL') badgeClass = 'cyber-badge-crimson';
-      if (alert.severity === 'CAUTION') badgeClass = 'cyber-badge-amber';
-      if (alert.severity === 'NOMINAL') badgeClass = 'cyber-badge-emerald';
+function dispatchProtocol(protocolKey) {
+  const feedbackEl = document.getElementById("protocol-feedback");
+  if (!feedbackEl) return;
 
-      const row = document.createElement('div');
-      row.className = 'alert-item-row';
-      row.innerHTML = `
-        <div class="alert-item-left">
-          <span class="cyber-badge ${badgeClass}">${alert.severity}</span>
-          <div>
-            <div class="alert-item-title">${alert.title}</div>
-            <div class="font-mono alert-item-meta">${alert.time} • ${alert.subsystem}</div>
+  const names = {
+    hydration: "HYDRATION PACK DISPENSE",
+    thermal: "LCVG TEMP REGULATE (+0.5°C)",
+    oxygen: "100% PRE-BREATHE FLUSH"
+  };
+
+  const name = names[protocolKey] || protocolKey.toUpperCase();
+  const time = new Date().toLocaleTimeString();
+
+  feedbackEl.style.display = "block";
+  feedbackEl.innerHTML = `✓ Protocol <strong>${name}</strong> transmitted to EMU-X Life Support Controller at ${time}. Telemetry acknowledge received.`;
+}
+
+function mountMedicalView() {
+  const mount = document.getElementById("medical-view-mount");
+  const homePanel = document.getElementById("medical-advisor-section");
+  if (mount && homePanel) {
+    mount.innerHTML = homePanel.innerHTML;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// 5. MISSION ALERTS FEED (Stream, ACK, and Anomaly Trigger)
+// ═════════════════════════════════════════════════════════════════════
+async function loadAlerts() {
+  const feedList = document.getElementById("alerts-feed-list");
+  const badgeCount = document.getElementById("alerts-count-badge");
+
+  try {
+    const res = await fetch("/api/alerts");
+    const data = await res.json();
+
+    if (!data.success || !Array.isArray(data.alerts)) return;
+
+    if (badgeCount) {
+      badgeCount.textContent = `${data.alerts.length} EVENTS`;
+    }
+
+    if (feedList) {
+      feedList.innerHTML = "";
+      data.alerts.forEach(alert => {
+        let badgeClass = "cyber-badge-cyan";
+        if (alert.severity === "CRITICAL") badgeClass = "cyber-badge-crimson";
+        if (alert.severity === "CAUTION") badgeClass = "cyber-badge-amber";
+        if (alert.severity === "NOMINAL") badgeClass = "cyber-badge-emerald";
+
+        const row = document.createElement("div");
+        row.className = "alert-row";
+
+        let ackBtnHtml = "";
+        if (!alert.acknowledged) {
+          ackBtnHtml = `<button class="btn-ack" onclick="acknowledgeAlert('${alert.id}')">ACK</button>`;
+        } else {
+          ackBtnHtml = `<span style="font-size:0.7rem; color:var(--text-muted);">ACK'D</span>`;
+        }
+
+        row.innerHTML = `
+          <div class="alert-content">
+            <span class="cyber-badge ${badgeClass}">${alert.severity}</span>
+            <div>
+              <div class="alert-title-text">${alert.title}</div>
+              <div class="alert-meta-text">${alert.time} • ${alert.subsystem}</div>
+            </div>
           </div>
-        </div>
-        ${!alert.acknowledged ? `<button class="btn-ack" onclick="acknowledgeAlert('${alert.id}')">ACK</button>` : `<span class="font-mono" style="font-size:0.68rem; color:var(--text-muted);">ACK'D</span>`}
-      `;
-      feedList.appendChild(row);
-    });
+          ${ackBtnHtml}
+        `;
+
+        feedList.appendChild(row);
+      });
+    }
+
+  } catch (err) {
+    console.error("Error loading mission alerts:", err);
   }
 }
 
 async function acknowledgeAlert(alertId) {
   try {
-    await fetch('/api/alerts/ack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/alerts/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: alertId })
     });
-  } catch (err) {}
-  missionAlerts = missionAlerts.map(a => a.id === alertId ? { ...a, acknowledged: true } : a);
-  loadAlerts();
+    if (res.ok) {
+      loadAlerts();
+    }
+  } catch (err) {
+    console.error("Error acknowledging alert:", err);
+  }
 }
 
-async function toggleSimAlarm() {
-  isAlarmActive = !isAlarmActive;
-  const label = document.getElementById('label-alarm');
-  const ribbonBadge = document.getElementById('ribbon-badge');
+async function triggerSimulatedAnomaly() {
+  try {
+    const res = await fetch("/api/alerts/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    if (res.ok) {
+      loadAlerts();
+      loadHome();
+      loadVitals();
 
-  if (isAlarmActive) {
-    if (label) label.textContent = '⚠️ ALARM ACTIVE';
-    if (ribbonBadge) {
-      ribbonBadge.className = 'cyber-badge cyber-badge-crimson';
-      ribbonBadge.textContent = 'CRITICAL DRILL';
+      // Audio/Visual Feedback
+      const badge = document.getElementById("body-status-badge");
+      if (badge) {
+        badge.className = "status-badge status-critical";
+        badge.textContent = "CRITICAL: TACHYCARDIA ANOMALY DETECTED";
+      }
+
+      const stressEl = document.getElementById("risk-stress");
+      if (stressEl) {
+        stressEl.innerHTML = `78% <span class="risk-sub" style="color:#f87171;">[ELEVATED]</span>`;
+      }
+    }
+  } catch (err) {
+    console.error("Error triggering anomaly simulation:", err);
+  }
+}
+
+function mountAlertsView() {
+  const mount = document.getElementById("alerts-view-mount");
+  const homePanel = document.getElementById("mission-alerts-section");
+  if (mount && homePanel) {
+    mount.innerHTML = homePanel.innerHTML;
+    loadAlerts();
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// 6. HERO INTERACTIVE FEATURES (Canvas, Typewriter, Stats, Crew)
+// ═════════════════════════════════════════════════════════════════════
+
+// Starfield & Comet Canvas Engine
+(function initSpaceCanvas() {
+  const canvas = document.getElementById('space-bg');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  let W = (canvas.width = window.innerWidth);
+  let H = (canvas.height = window.innerHeight);
+
+  window.addEventListener('resize', () => {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    initStars();
+  });
+
+  const NUM_STARS = 160;
+  const stars = [];
+
+  function initStars() {
+    stars.length = 0;
+    for (let i = 0; i < NUM_STARS; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.3 + 0.3,
+        base: Math.random() * 0.45 + 0.1,
+        spd: Math.random() * 0.025 + 0.008,
+        off: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  initStars();
+
+  const comets = [];
+  const MAX_COMETS = 4;
+
+  function spawnComet() {
+    const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.4;
+    const side = Math.random() < 0.6 ? 'top' : 'left';
+    const len = 90 + Math.random() * 110;
+    const spd = 2.5 + Math.random() * 3;
+    const x = side === 'top' ? Math.random() * W : -len;
+    const y = side === 'top' ? -len : Math.random() * H * 0.6;
+    comets.push({
+      x,
+      y,
+      angle,
+      spd,
+      len,
+      op: 0.6 + Math.random() * 0.35,
+      w: 1 + Math.random(),
+    });
+  }
+
+  for (let i = 0; i < MAX_COMETS; i++) {
+    setTimeout(spawnComet, i * 1800 + Math.random() * 800);
+  }
+
+  function loop(ts) {
+    ctx.clearRect(0, 0, W, H);
+    const t = ts * 0.001;
+
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const op = s.base + Math.sin(t * s.spd + s.off) * 0.18;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, Math.min(1, op))})`;
+      ctx.fill();
     }
 
-    try {
-      await fetch('/api/alerts/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-    } catch (e) {}
+    for (let i = comets.length - 1; i >= 0; i--) {
+      const c = comets[i];
+      c.x += Math.cos(c.angle) * c.spd;
+      c.y += Math.sin(c.angle) * c.spd;
 
-    const newAlert = {
-      id: `ALT-${Date.now()}`,
-      severity: 'CRITICAL',
-      title: 'SIMULATED TACHYCARDIA & METABOLIC ELEVATION',
-      subsystem: 'Cardio-Bio',
-      time: new Date().toTimeString().slice(0, 8),
-      acknowledged: false
-    };
-    missionAlerts.unshift(newAlert);
+      if (c.x > W + c.len || c.y > H + c.len) {
+        comets.splice(i, 1);
+        setTimeout(spawnComet, 2000 + Math.random() * 3000);
+        continue;
+      }
 
-    crew = crew.map(a => a.id === activeAstronautId ? { ...a, hr: 125, stress: 78, status: 'Warning' } : a);
+      const tx = c.x - Math.cos(c.angle) * c.len;
+      const ty = c.y - Math.sin(c.angle) * c.len;
+      const grad = ctx.createLinearGradient(tx, ty, c.x, c.y);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(0.6, `rgba(242, 190, 221, ${c.op * 0.4})`);
+      grad.addColorStop(1, `rgba(255, 255, 255, ${c.op})`);
+
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(c.x, c.y);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = c.w;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.w * 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${c.op})`;
+      ctx.fill();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+
+// Typewriter Effect
+(function initTypewriter() {
+  const words = ['Astronaut Health.', 'Deep-Space Vitals.', 'Crew Biometrics.'];
+  let wordIdx = 0;
+  let charIdx = 0;
+  let isDeleting = false;
+  const el = document.getElementById('hero-typewriter');
+  if (!el) return;
+
+  function tick() {
+    const word = words[wordIdx];
+    if (!isDeleting) {
+      charIdx++;
+      el.textContent = word.slice(0, charIdx);
+      if (charIdx === word.length) {
+        setTimeout(() => {
+          isDeleting = true;
+          tick();
+        }, 1800);
+        return;
+      }
+    } else {
+      charIdx--;
+      el.textContent = word.slice(0, charIdx);
+      if (charIdx === 0) {
+        isDeleting = false;
+        wordIdx = (wordIdx + 1) % words.length;
+      }
+    }
+    setTimeout(tick, isDeleting ? 45 : 85);
+  }
+
+  tick();
+})();
+
+// Stats Count-Up Animation
+(function initStatsCountUp() {
+  function animateValue(id, target, suffix = '', duration = 1400) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let start = null;
+    function step(ts) {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.floor(ease * target) + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  setTimeout(() => {
+    animateValue('stat-crew', 4, '');
+    animateValue('stat-spo2', 98, '%');
+    animateValue('stat-hr', 72, '');
+    animateValue('stat-days', 14, 'd');
+  }, 300);
+})();
+
+// Crew Live Heart-Rate Fluctuation
+(function initCrewPulse() {
+  const crewIds = ['SV', 'MC', 'ER', 'DK'];
+  setInterval(() => {
+    crewIds.forEach(id => {
+      const el = document.getElementById(`crew-hr-${id}`);
+      if (el) {
+        const cur = parseInt(el.textContent, 10) || 72;
+        const delta = Math.floor(Math.random() * 3) - 1;
+        el.textContent = Math.min(105, Math.max(55, cur + delta));
+      }
+    });
+  }, 2500);
+})();
+
+// Initial Page Load
+window.addEventListener("DOMContentLoaded", () => {
+  const hash = window.location.hash.replace("#", "");
+  if (hash === "vitals" || hash === "environmental" || hash === "medical" || hash === "alerts") {
+    navigateTo(hash);
   } else {
-    if (label) label.textContent = '🚨 SIM ANOMALY';
-    if (ribbonBadge) {
-      ribbonBadge.className = 'cyber-badge cyber-badge-emerald';
-      ribbonBadge.textContent = 'STABLE ORBIT';
-    }
-    crew = crew.map(a => a.id === activeAstronautId ? { ...a, hr: 72, stress: 18, status: 'Nominal' } : a);
+    navigateTo("home");
   }
 
-  updateProfileCard();
-  updateAdvisorCard();
-  renderCrewRoster();
-  loadAlerts();
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// 9. SIDEBAR NAVIGATION CHANNEL SWITCHER
-// ═════════════════════════════════════════════════════════════════════
-function switchTab(tabId) {
-  activeTab = tabId;
-
-  document.querySelectorAll('.channel-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
-  });
-
-  document.querySelectorAll('.tab-view').forEach(view => {
-    view.classList.remove('active');
-  });
-
-  const targetView = document.getElementById(`view-${tabId}`);
-  if (targetView) {
-    targetView.classList.add('active');
-
-    // Populate dedicated channel views if empty
-    if (tabId === 'tesseract') {
-      targetView.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:20px;">
-          <div class="hud-panel" style="padding:20px;">
-            <h2 class="font-orbitron" style="font-size:1.1rem; color:#fff; margin-bottom:12px;">4D BIO-TESSERACT HYPERCUBE RESONATOR (FULL CHANNEL)</h2>
-            <p class="font-mono" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">
-              Direct mathematical mapping of 4-dimensional spatial bio-resonance coupled to cardiac pulse vectors.
-            </p>
-            <div class="tesseract-canvas-wrapper" style="min-height:500px;">
-              <canvas id="tesseract-canvas-dedicated" width="720" height="500"></canvas>
-            </div>
-          </div>
-        </div>
-      `;
-      // Draw copy to dedicated canvas
-      const dCanvas = document.getElementById('tesseract-canvas-dedicated');
-      if (dCanvas && tesseractCanvas) {
-        const dCtx = dCanvas.getContext('2d');
-        dCtx.drawImage(tesseractCanvas, 0, 0, 720, 500);
-      }
-    } else if (tabId === 'ecg') {
-      targetView.innerHTML = `
-        <div class="hud-panel" style="padding:20px;">
-          <h2 class="font-orbitron" style="font-size:1.1rem; color:#fff; margin-bottom:12px;">HIGH-RESOLUTION ELECTROCARDIOGRAM OSCILLOSCOPE</h2>
-          <div class="ecg-canvas-wrapper" style="min-height:360px;">
-            <canvas id="ecg-canvas-dedicated" width="900" height="360"></canvas>
-          </div>
-        </div>
-      `;
-    } else if (tabId === 'lifesupport') {
-      targetView.innerHTML = `
-        <div class="hud-panel" style="padding:20px;">
-          <h2 class="font-orbitron" style="font-size:1.1rem; color:#fff; margin-bottom:12px;">EMU-X SUIT LIFE SUPPORT COMPREHENSIVE STATUS</h2>
-          <div class="lifesupport-grid" style="margin-top:16px;">
-            <div class="gauge-card"><div class="gauge-card-num color-cyan">4.3 psi</div><div class="font-mono">SUIT INTERNAL PURE O2</div></div>
-            <div class="gauge-card"><div class="gauge-card-num color-emerald">37.1 °C</div><div class="font-mono">CORE BODY TEMPERATURE</div></div>
-            <div class="gauge-card"><div class="gauge-card-num color-white">94% / 100%</div><div class="font-mono">PRIMARY & SOP O2 TANKS</div></div>
-            <div class="gauge-card"><div class="gauge-card-num color-violet">0.18 mmHg</div><div class="font-mono">CO2 PARTIAL PRESSURE</div></div>
-          </div>
-        </div>
-      `;
-    } else if (tabId === 'ai-doc') {
-      targetView.innerHTML = `
-        <div class="hud-panel" style="padding:20px;">
-          <h2 class="font-orbitron" style="font-size:1.1rem; color:#fff; margin-bottom:12px;">AI BIO-DIAGNOSTIC NEURAL SCANNER</h2>
-          <p class="advisor-narrative">Autonomous synthesis across multi-parameter sensor arrays. Zero external dependencies.</p>
-          <button class="hud-btn hud-btn-emerald" onclick="runNeuralDiagnosticScan()">⚡ RUN NEURAL SCAN</button>
-        </div>
-      `;
-    } else if (tabId === 'crew') {
-      targetView.innerHTML = `
-        <div class="hud-panel" style="padding:20px;">
-          <h2 class="font-orbitron" style="font-size:1.1rem; color:#fff; margin-bottom:12px;">CREW SQUAD BIOMETRIC ROSTER (4/4 ACTIVE)</h2>
-          <div id="crew-roster-dedicated" class="crew-roster-grid" style="margin-top:16px;"></div>
-        </div>
-      `;
-      const ded = document.getElementById('crew-roster-dedicated');
-      if (ded) {
-        crew.forEach(m => {
-          const c = document.createElement('div');
-          c.className = 'crew-card';
-          c.innerHTML = `
-            <div class="crew-card-name">${m.name}</div>
-            <div class="crew-card-role font-mono">${m.role}</div>
-            <div class="color-emerald">HR: ${m.hr} BPM | SpO2: ${m.spo2}%</div>
-          `;
-          ded.appendChild(c);
-        });
-      }
+  // Periodic Telemetry & Alerts Refresh (Every 3 seconds)
+  setInterval(() => {
+    const active = document.querySelector(".page-view.active");
+    if (!active) return;
+    if (active.id === "page-home") {
+      loadHome();
+      loadAlerts();
     }
-  }
+    if (active.id === "page-vitals") loadVitals();
+    if (active.id === "page-environmental") loadEnvironmental();
+    if (active.id === "page-alerts") loadAlerts();
+  }, 3000);
 
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+  // Initialize Mission AI Assistant
+  initAiAssistant();
+});
 
 // ═════════════════════════════════════════════════════════════════════
-// 10. MISSION AI ASSISTANT CONTROLLER
+// 6. MISSION AI ASSISTANT CONTROLLER
 // ═════════════════════════════════════════════════════════════════════
 let aiSuggestionsCache = [];
-let aiAssistantInitialized = false;
+let aiInitialized = false;
 
 function toggleAiAssistant() {
-  const widget = document.getElementById('ai-assistant-widget');
+  const widget = document.getElementById("ai-assistant-widget");
   if (!widget) return;
-  const isClosed = widget.classList.contains('closed');
+  const isClosed = widget.classList.contains("closed");
   if (isClosed) {
-    widget.classList.remove('closed');
-    widget.setAttribute('aria-hidden', 'false');
-    const input = document.getElementById('ai-chat-input');
+    widget.classList.remove("closed");
+    widget.setAttribute("aria-hidden", "false");
+    const input = document.getElementById("ai-chat-input");
     if (input) input.focus();
-    if (!aiAssistantInitialized) {
+    if (!aiInitialized) {
       initAiAssistant();
     }
   } else {
-    widget.classList.add('closed');
-    widget.setAttribute('aria-hidden', 'true');
+    widget.classList.add("closed");
+    widget.setAttribute("aria-hidden", "true");
   }
 }
 
 function openAiAssistant() {
-  const widget = document.getElementById('ai-assistant-widget');
-  if (widget && widget.classList.contains('closed')) toggleAiAssistant();
+  const widget = document.getElementById("ai-assistant-widget");
+  if (widget && widget.classList.contains("closed")) {
+    toggleAiAssistant();
+  }
 }
 
 function closeAiAssistant() {
-  const widget = document.getElementById('ai-assistant-widget');
-  if (widget && !widget.classList.contains('closed')) toggleAiAssistant();
+  const widget = document.getElementById("ai-assistant-widget");
+  if (widget && !widget.classList.contains("closed")) {
+    toggleAiAssistant();
+  }
 }
 
 async function initAiAssistant() {
-  aiAssistantInitialized = true;
+  aiInitialized = true;
   await loadAiSuggestions();
-  const msgContainer = document.getElementById('ai-chat-messages');
-  if (msgContainer && msgContainer.children.length === 0) {
+  const messagesContainer = document.getElementById("ai-chat-messages");
+  if (messagesContainer && messagesContainer.children.length === 0) {
     renderWelcomeGreeting();
   }
 }
 
 function renderWelcomeGreeting() {
   appendAiMessage(
-    'assistant',
-    'Greetings! I am the **Bio-Tesseract AI Mission Assistant**.\n\nI monitor real-time crew physiological telemetry, evaluate environmental life support parameters, run diagnostic scans, and guide you through mission operations.\n\nSelect a quick mission prompt below or type your query:',
-    'navigate:tesseract',
-    '💠 Explore 4D Bio-Tesseract Resonator',
+    "assistant",
+    "Greetings! I am the **Bio-Tesseract AI Mission Assistant**.\n\nI monitor real-time crew physiological telemetry, evaluate environmental life support parameters, run diagnostic scans, and guide you through mission operations.\n\nSelect a quick mission prompt below or type your query:",
+    "navigate:vitals",
+    "Explore Live Astronaut Vitals →",
     [
-      'What is Project Bio-Tesseract?',
-      'How to check astronaut vitals?',
-      'How does the 4D Tesseract work?',
-      'Simulate an anomaly drill'
+      "What is Project Bio-Tesseract?",
+      "How to check astronaut vitals?",
+      "Show anatomical body map",
+      "Simulate critical anomaly"
     ]
   );
 }
 
 function resetAiChat() {
-  const msgContainer = document.getElementById('ai-chat-messages');
-  if (msgContainer) msgContainer.innerHTML = '';
+  const messagesContainer = document.getElementById("ai-chat-messages");
+  if (messagesContainer) {
+    messagesContainer.innerHTML = "";
+  }
   renderWelcomeGreeting();
 }
 
 async function loadAiSuggestions() {
-  const container = document.getElementById('ai-chips-container');
+  const container = document.getElementById("ai-chips-container");
   if (!container) return;
 
   try {
-    const res = await fetch('/api/assistant/suggestions');
+    const res = await fetch("/api/assistant/suggestions");
     const data = await res.json();
     if (data.success && Array.isArray(data.suggestions)) {
       aiSuggestionsCache = data.suggestions;
-      container.innerHTML = '';
+      container.innerHTML = "";
       data.suggestions.forEach(q => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'ai-chip-btn font-mono';
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "ai-chip-btn";
         chip.textContent = q;
         chip.onclick = () => sendAiQuery(q);
         container.appendChild(chip);
       });
     }
   } catch (err) {
-    console.warn('Could not load AI suggestions:', err);
+    console.warn("Could not load AI suggestions:", err);
   }
 }
 
 function renderAiMarkdown(text) {
-  if (!text) return '';
+  if (!text) return "";
   let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
-  // Bold
+  // Bold formatting
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  // Inline code
+  // Inline code formatting
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
   const lines = html.split('\n');
@@ -834,7 +807,7 @@ function renderAiMarkdown(text) {
 
   for (let line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
+    if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
       if (!inList) {
         result += '<ul>';
         inList = true;
@@ -855,35 +828,37 @@ function renderAiMarkdown(text) {
 }
 
 function appendAiMessage(role, text, action = null, actionLabel = null, followUps = []) {
-  const container = document.getElementById('ai-chat-messages');
+  const container = document.getElementById("ai-chat-messages");
   if (!container) return;
 
-  const msgDiv = document.createElement('div');
+  const msgDiv = document.createElement("div");
   msgDiv.className = `ai-msg ai-msg-${role}`;
 
-  const bubble = document.createElement('div');
-  bubble.className = 'ai-bubble';
+  const bubble = document.createElement("div");
+  bubble.className = "ai-bubble";
   bubble.innerHTML = renderAiMarkdown(text);
 
+  // In-Chat Action Trigger Button
   if (action && actionLabel) {
-    const actBox = document.createElement('div');
-    actBox.className = 'ai-action-container';
-    const actBtn = document.createElement('button');
-    actBtn.type = 'button';
-    actBtn.className = 'ai-msg-action-btn font-orbitron';
+    const actBox = document.createElement("div");
+    actBox.className = "ai-action-container";
+    const actBtn = document.createElement("button");
+    actBtn.type = "button";
+    actBtn.className = "ai-msg-action-btn";
     actBtn.innerHTML = `<span>⚡</span> ${actionLabel}`;
     actBtn.onclick = () => executeAssistantAction(action);
     actBox.appendChild(actBtn);
     bubble.appendChild(actBox);
   }
 
+  // Follow-Up Quick Suggestions
   if (Array.isArray(followUps) && followUps.length > 0) {
-    const followBox = document.createElement('div');
-    followBox.className = 'ai-msg-followups';
+    const followBox = document.createElement("div");
+    followBox.className = "ai-msg-followups";
     followUps.forEach(f => {
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'ai-followup-pill font-mono';
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "ai-followup-pill";
       pill.textContent = f;
       pill.onclick = () => sendAiQuery(f);
       followBox.appendChild(pill);
@@ -897,12 +872,12 @@ function appendAiMessage(role, text, action = null, actionLabel = null, followUp
 }
 
 function showTypingIndicator() {
-  const container = document.getElementById('ai-chat-messages');
+  const container = document.getElementById("ai-chat-messages");
   if (!container) return null;
 
-  const typingDiv = document.createElement('div');
-  typingDiv.className = 'ai-msg ai-msg-assistant ai-typing-msg';
-  typingDiv.id = 'ai-typing-indicator';
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "ai-msg ai-msg-assistant ai-typing-msg";
+  typingDiv.id = "ai-typing-indicator";
   typingDiv.innerHTML = `
     <div class="ai-bubble">
       <div class="ai-typing-indicator">
@@ -914,24 +889,28 @@ function showTypingIndicator() {
   `;
   container.appendChild(typingDiv);
   container.scrollTop = container.scrollHeight;
+  return typingDiv;
 }
 
 function removeTypingIndicator() {
-  const el = document.getElementById('ai-typing-indicator');
+  const el = document.getElementById("ai-typing-indicator");
   if (el) el.remove();
 }
 
 async function sendAiQuery(queryText) {
-  const trimmed = (queryText || '').trim();
+  const trimmed = (queryText || "").trim();
   if (!trimmed) return;
 
-  appendAiMessage('user', trimmed);
+  // Append user message
+  appendAiMessage("user", trimmed);
+
+  // Show typing indicator
   showTypingIndicator();
 
   try {
-    const res = await fetch('/api/assistant/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/api/assistant/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: trimmed })
     });
     const data = await res.json();
@@ -939,7 +918,7 @@ async function sendAiQuery(queryText) {
 
     if (data.success) {
       appendAiMessage(
-        'assistant',
+        "assistant",
         data.reply,
         data.action,
         data.actionLabel,
@@ -947,80 +926,55 @@ async function sendAiQuery(queryText) {
       );
     } else {
       appendAiMessage(
-        'assistant',
-        'Apologies, telemetry link experienced a glitch. Please re-try your question.',
+        "assistant",
+        "Apologies, telemetry link experienced a glitch. Please re-try your question.",
         null,
         null,
-        ['How to check astronaut vitals?', 'What is Project Bio-Tesseract?']
+        ["How to check astronaut vitals?", "What is Project Bio-Tesseract?"]
       );
     }
   } catch (err) {
     removeTypingIndicator();
-    appendAiMessage('assistant', 'Network glitch: Unable to contact Bio-Tesseract backend.', null, null, []);
+    console.error("AI Assistant request error:", err);
+    appendAiMessage(
+      "assistant",
+      "Network glitch: Unable to contact Bio-Tesseract backend. Check server connectivity.",
+      null,
+      null,
+      []
+    );
   }
 }
 
 function handleAiChatSubmit(event) {
   if (event) event.preventDefault();
-  const input = document.getElementById('ai-chat-input');
+  const input = document.getElementById("ai-chat-input");
   if (!input) return;
   const text = input.value;
   if (!text || !text.trim()) return;
-  input.value = '';
+  input.value = "";
   sendAiQuery(text);
 }
 
 function executeAssistantAction(action) {
   if (!action) return;
 
-  if (action === 'trigger:anomaly') {
-    toggleSimAlarm();
-  } else if (action === 'navigate:tesseract' || action.includes('tesseract')) {
-    switchTab('tesseract');
-  } else if (action === 'navigate:vitals' || action.includes('vitals') || action.includes('ecg')) {
-    switchTab('ecg');
-  } else if (action.includes('lifesupport') || action.includes('environmental')) {
-    switchTab('lifesupport');
-  } else if (action.includes('medical') || action.includes('advisor')) {
-    switchTab('ai-doc');
-  } else if (action.includes('crew')) {
-    switchTab('crew');
-  } else {
-    switchTab('overview');
+  if (action.startsWith("navigate:")) {
+    const pageId = action.split(":")[1];
+    navigateTo(pageId);
+  } else if (action.startsWith("scroll:")) {
+    const sectionId = action.split(":")[1];
+    scrollToSection(sectionId);
+  } else if (action === "trigger:anomaly") {
+    triggerSimulatedAnomaly();
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════
-// 11. INITIALIZATION ON DOM READY
-// ═════════════════════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
-  initMissionClock();
-  updateProfileCard();
-  updateAdvisorCard();
-  renderCrewRoster();
-  initBiometricDrift();
-  initTesseractResonator();
-  initEcgOscilloscope();
-  loadAlerts();
-  initAiAssistant();
-});
-
-// Global window bindings for inline HTML handlers
-window.handleSelectAstronaut = handleSelectAstronaut;
-window.toggleAudio = toggleAudio;
-window.toggleSimAlarm = toggleSimAlarm;
-window.toggleTesseractRotation = toggleTesseractRotation;
-window.toggleTesseractProjection = toggleTesseractProjection;
-window.setTesseractSpeed = setTesseractSpeed;
-window.setEcgLead = setEcgLead;
-window.runNeuralDiagnosticScan = runNeuralDiagnosticScan;
-window.dispatchProtocol = dispatchProtocol;
-window.acknowledgeAlert = acknowledgeAlert;
-window.switchTab = switchTab;
+// Global exposure for inline HTML events
 window.toggleAiAssistant = toggleAiAssistant;
 window.openAiAssistant = openAiAssistant;
 window.closeAiAssistant = closeAiAssistant;
 window.resetAiChat = resetAiChat;
 window.handleAiChatSubmit = handleAiChatSubmit;
-window.sendAiQuery = sendAiQuery;
 window.executeAssistantAction = executeAssistantAction;
+window.sendAiQuery = sendAiQuery;
